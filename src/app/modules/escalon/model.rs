@@ -1,6 +1,5 @@
 use chrono::NaiveDateTime;
 use diesel::PgConnection;
-use escalon_jobs::manager::Context;
 use escalon_jobs::EscalonJobStatus;
 use rocket::serde::uuid::Uuid;
 use serde::{Deserialize, Serialize};
@@ -10,6 +9,7 @@ use rocket_sync_db_pools::ConnectionPool;
 use crate::database::connection::Db;
 use crate::database::schema::escalonjobs;
 
+use crate::app::server::Context;
 use crate::app::modules::cron::model::{NewAppJob, AppJob, AppJobComplete};
 
 #[derive(Debug, Clone, Deserialize, Serialize, Queryable, Identifiable, Insertable, AsChangeset)]
@@ -58,33 +58,30 @@ impl From<NewEJob> for NewEscalonJob {
 }
 
 #[async_trait]
-impl EscalonJobTrait<ConnectionPool<Db, PgConnection>> for NewEJob {
-    async fn run_job(&self, job: EscalonJob, ctx: Context<ConnectionPool<Db, PgConnection>>) -> EscalonJob {
-        use diesel::prelude::*;
-        use crate::database::schema::{appjobs, escalonjobs};
+impl EscalonJobTrait<Context<ConnectionPool<Db, PgConnection>>> for NewEJob {
+    async fn run_job(&self, job: EscalonJob, _ctx: Context<ConnectionPool<Db, PgConnection>>) -> EscalonJob {
+        println!("running job: {}", job.job_id);
+        // use diesel::prelude::*;
+        // use crate::database::schema::{appjobs, escalonjobs};
 
-        let blah = ctx.0.get().await.unwrap().run(move |conn| {
-            let app_job: AppJob = appjobs::table
-                .filter(appjobs::job_id.eq(job.job_id))
-                .first::<AppJob>(conn).unwrap();
+        // let blah = ctx.0.get().await.unwrap().run(move |conn| {
+        //     let app_job: AppJob = appjobs::table
+        //         .filter(appjobs::job_id.eq(job.job_id))
+        //         .first::<AppJob>(conn).unwrap();
 
-            let escalon_job = escalonjobs::table
-                .find(job.job_id)
-                .first::<EJob>(conn).unwrap();
+        //     let escalon_job = escalonjobs::table
+        //         .find(job.job_id)
+        //         .first::<EJob>(conn).unwrap();
 
-            AppJobComplete {
-                id: app_job.id,
-                service: app_job.service,
-                route: app_job.route,
-                job: escalon_job,
-            }
+        //     AppJobComplete {
+        //         id: app_job.id,
+        //         service: app_job.service,
+        //         route: app_job.route,
+        //         job: escalon_job,
+        //     }
 
-        }).await;
-
-        println!("blah: {:?}", blah);
+        // }).await;
 
         job
     }
-    async fn update_job(&self, job: &EscalonJob) {}
-
 }

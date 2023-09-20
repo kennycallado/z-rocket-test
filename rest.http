@@ -43,9 +43,9 @@ Content-type: application/json
 
 {
   "service": "servicio",
-  "route": "ruta",
+  "route": "ruta--",
   "job": {
-    "schedule": "0/5 * * * * *"
+    "schedule": "0/2 * * * * *"
   }
 }
 

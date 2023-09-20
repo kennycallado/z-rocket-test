@@ -1,12 +1,16 @@
 use std::net::IpAddr;
+use escalon_jobs::EscalonJob;
 use rocket_sync_db_pools::ConnectionPool;
+
+use crate::app::modules::cron::model::{AppJob, AppJobComplete};
+use crate::app::modules::escalon::model::EJob;
 
 #[cfg(feature = "cron")]
 use crate::app::providers::services::cron::CronManager;
 #[cfg(feature = "db")]
 use crate::database::connection;
 use diesel::PgConnection;
-use escalon_jobs::manager::{EscalonJobsManager, Context};
+use escalon_jobs::manager::{EscalonJobsManager, ContextTrait};
 use rocket::{Rocket, Build, State, Orbit};
 #[cfg(feature = "db")]
 use rocket::fairing::AdHoc;
@@ -82,8 +86,58 @@ pub async fn rocket() -> _ {
         .attach(modules_routing::router())
 }
 
-pub struct Manager {
-    pub escalon: EscalonJobsManager<ConnectionPool<Db, PgConnection>>
+#[derive(Debug, Clone)]
+pub struct Context<T>(pub T);
+
+type ContextDb = Context<ConnectionPool<Db, PgConnection>>;
+
+#[rocket::async_trait]
+impl ContextTrait<ContextDb> for ContextDb {
+    async fn update_job(&self, job: EscalonJob, Context(ctx): &ContextDb) {
+        use diesel::prelude::*;
+        use crate::database::schema::{appjobs, escalonjobs};
+
+        let blah = ctx.get().await.unwrap().run(move |conn| {
+            let app_job: AppJob = appjobs::table
+                .filter(appjobs::job_id.eq(job.job_id))
+                .first::<AppJob>(conn).unwrap();
+
+            let escalon_job = escalonjobs::table
+                .find(job.job_id)
+                .first::<EJob>(conn).unwrap();
+
+            AppJobComplete {
+                id: app_job.id,
+                service: app_job.service,
+                route: app_job.route,
+                job: escalon_job,
+            }
+        }).await;
+        
+        println!("update_job: {:?}", blah);
+
+        // let blah = ctx.0.get().await.unwrap().run(move |conn| {
+        //     let app_job: AppJob = appjobs::table
+        //         .filter(appjobs::job_id.eq(job.job_id))
+        //         .first::<AppJob>(conn).unwrap();
+
+        //     let escalon_job = escalonjobs::table
+        //         .find(job.job_id)
+        //         .first::<EJob>(conn).unwrap();
+
+        //     AppJobComplete {
+        //         id: app_job.id,
+        //         service: app_job.service,
+        //         route: app_job.route,
+        //         job: escalon_job,
+        //     }
+
+        // }).await;
+    }
+
+    async fn take_jobs(&self, from: String, start_at: usize, n_jobs: usize) {
+        println!("taking jobs: {} {} {}", from, start_at, n_jobs)
+    }
 }
 
 async fn test(rocket: Rocket<Build>) -> Rocket<Build> {
@@ -102,5 +156,5 @@ async fn test(rocket: Rocket<Build>) -> Rocket<Build> {
 
     jm.init().await;
 
-    rocket.manage(Manager { escalon: jm })
+    rocket.manage(jm)
 }
