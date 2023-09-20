@@ -36,27 +36,17 @@ pub async fn create(db: Db, jm: &State<Manager>, new_job: Json<PostNewAppJob>) -
 
     let escalon_job = jm.escalon.add_job(new_job.job.clone()).await;
 
-    let ejob = EJob {
-        id: escalon_job.job_id,
-        schedule: escalon_job.schedule,
-        since: escalon_job.since,
-        until: escalon_job.until,
-    };
-
     let new_job = NewAppJob {
         service: new_job.service,
         route: new_job.route,
-        job_id: ejob.id,
+        job_id: escalon_job.job_id.clone(),
     };
 
-    escalon_repository::insert(&db, ejob).await.unwrap();
+    escalon_repository::insert(&db, escalon_job.into()).await.unwrap();
 
     let job = cron_repository::create(&db, new_job).await.unwrap();
     let job = cron_repository::get_complete(&db, job.id).await.unwrap();
 
-
-    // let job = cron_repository::create(&db, new_job.into_inner()).await.unwrap();
-    // let job = cron_repository::get_complete(&db, job.id).await.unwrap();
 
     Json(job)
 }

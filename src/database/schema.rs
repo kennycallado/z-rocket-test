@@ -12,6 +12,7 @@ diesel::table! {
 diesel::table! {
     escalonjobs (id) {
         id -> Uuid,
+        status -> Varchar,
         schedule -> Varchar,
         since -> Nullable<Timestamp>,
         until -> Nullable<Timestamp>,
