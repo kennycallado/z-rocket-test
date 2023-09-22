@@ -10,6 +10,7 @@ use crate::app::modules::escalon::model::{EJob, NewEJob};
 #[serde(crate = "rocket::serde")]
 pub struct AppJob {
     pub id: i32,
+    pub owner: String,
     pub service: String,
     pub route: String,
     pub job_id: Uuid,
@@ -19,9 +20,21 @@ pub struct AppJob {
 #[diesel(table_name = appjobs)]
 #[serde(crate = "rocket::serde")]
 pub struct NewAppJob {
+    pub owner: String,
     pub service: String,
     pub route: String,
     pub job_id: Uuid,
+}
+
+impl From<AppJob> for NewAppJob {
+    fn from(appjob: AppJob) -> Self {
+        NewAppJob {
+            owner: appjob.owner,
+            service: appjob.service,
+            route: appjob.route,
+            job_id: appjob.job_id,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -35,6 +48,7 @@ pub struct PostNewAppJob {
 #[serde(crate = "rocket::serde")]
 pub struct AppJobComplete {
     pub id: i32,
+    pub owner: String,
     pub service: String,
     pub route: String,
     pub job: EJob,

@@ -3,6 +3,7 @@
 diesel::table! {
     appjobs (id) {
         id -> Int4,
+        owner -> Varchar,
         service -> Varchar,
         route -> Varchar,
         job_id -> Uuid,
@@ -14,8 +15,8 @@ diesel::table! {
         id -> Uuid,
         status -> Varchar,
         schedule -> Varchar,
-        since -> Nullable<Timestamp>,
-        until -> Nullable<Timestamp>,
+        since -> Nullable<Timestamptz>,
+        until -> Nullable<Timestamptz>,
     }
 }
 

@@ -1,4 +1,4 @@
-use chrono::NaiveDateTime;
+use chrono::{NaiveDateTime, DateTime, Utc};
 use diesel::PgConnection;
 use escalon_jobs::EscalonJobStatus;
 use rocket::serde::uuid::Uuid;
@@ -43,45 +43,45 @@ impl From<EscalonJob> for EJob {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct NewEJob {
     pub schedule: String,
-    pub since: Option<NaiveDateTime>,
-    pub until: Option<NaiveDateTime>,
+    pub since: Option<DateTime<Utc>>,
+    pub until: Option<DateTime<Utc>>,
 }
 
 impl From<NewEJob> for NewEscalonJob {
     fn from(ejob: NewEJob) -> Self {
         NewEscalonJob {
             schedule: ejob.schedule,
-            since: ejob.since,
-            until: ejob.until,
+            since: ejob.since.map(|d| d.naive_utc()),
+            until: ejob.until.map(|d| d.naive_utc()),
         }
     }
 }
 
-#[async_trait]
-impl EscalonJobTrait<Context<ConnectionPool<Db, PgConnection>>> for NewEJob {
-    async fn run_job(&self, job: EscalonJob, _ctx: Context<ConnectionPool<Db, PgConnection>>) -> EscalonJob {
-        println!("running job: {}", job.job_id);
-        // use diesel::prelude::*;
-        // use crate::database::schema::{appjobs, escalonjobs};
+// #[async_trait]
+// impl EscalonJobTrait<Context<ConnectionPool<Db, PgConnection>>> for NewEJob {
+//     async fn run_job(&self, _ctx: Context<ConnectionPool<Db, PgConnection>>, job: EscalonJob) -> EscalonJob {
+//         println!("running job: {}", job.job_id);
+//         // use diesel::prelude::*;
+//         // use crate::database::schema::{appjobs, escalonjobs};
 
-        // let blah = ctx.0.get().await.unwrap().run(move |conn| {
-        //     let app_job: AppJob = appjobs::table
-        //         .filter(appjobs::job_id.eq(job.job_id))
-        //         .first::<AppJob>(conn).unwrap();
+//         // let blah = ctx.0.get().await.unwrap().run(move |conn| {
+//         //     let app_job: AppJob = appjobs::table
+//         //         .filter(appjobs::job_id.eq(job.job_id))
+//         //         .first::<AppJob>(conn).unwrap();
 
-        //     let escalon_job = escalonjobs::table
-        //         .find(job.job_id)
-        //         .first::<EJob>(conn).unwrap();
+//         //     let escalon_job = escalonjobs::table
+//         //         .find(job.job_id)
+//         //         .first::<EJob>(conn).unwrap();
 
-        //     AppJobComplete {
-        //         id: app_job.id,
-        //         service: app_job.service,
-        //         route: app_job.route,
-        //         job: escalon_job,
-        //     }
+//         //     AppJobComplete {
+//         //         id: app_job.id,
+//         //         service: app_job.service,
+//         //         route: app_job.route,
+//         //         job: escalon_job,
+//         //     }
 
-        // }).await;
+//         // }).await;
 
-        job
-    }
-}
+//         job
+//     }
+// }

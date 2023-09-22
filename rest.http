@@ -33,11 +33,15 @@ Accept: application/json
 
 # {{{ example
 
-GET http://localhost:8000/cron/
+GET http://localhost:8002/cron/
 Accept: application/json
 Content-type: application/json
 
-POST http://localhost:8000/cron/
+GET http://localhost:8002/cron/1
+Accept: application/json
+Content-type: application/json
+
+POST http://localhost:8001/cron/
 Accept: application/json
 Content-type: application/json
 
@@ -49,5 +53,8 @@ Content-type: application/json
   }
 }
 
-
 # }}}
+
+#     "schedule": "0/2 * * * * *",
+#     "since": "2023-09-21T12:10:00.0+0200",
+#     "until": "2023-09-21T12:10:30.0+0200"

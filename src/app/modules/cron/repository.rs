@@ -41,6 +41,7 @@ pub async fn get_complete(db: &Db, id: i32) -> Result<AppJobComplete, diesel::re
 
         Ok(AppJobComplete {
             id: app_job.id,
+            owner: app_job.owner,
             service: app_job.service,
             route: app_job.route,
             job: escalon_job,
