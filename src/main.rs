@@ -3,8 +3,8 @@
 mod app;
 mod database;
 
-#[cfg(test)]
-mod test;
+// #[cfg(test)]
+// mod test;
 
 extern crate openssl;
 

@@ -40,6 +40,16 @@ impl From<EscalonJob> for EJob {
     }
 }
 
+impl From<EJob> for NewEJob {
+    fn from(ejob: EJob) -> Self {
+        Self {
+            schedule: ejob.schedule,
+            since: ejob.since.map(|d| DateTime::from_naive_utc_and_offset(d, Utc)),
+            until: ejob.until.map(|d| DateTime::from_naive_utc_and_offset(d, Utc)),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct NewEJob {
     pub schedule: String,
@@ -57,31 +67,31 @@ impl From<NewEJob> for NewEscalonJob {
     }
 }
 
-// #[async_trait]
-// impl EscalonJobTrait<Context<ConnectionPool<Db, PgConnection>>> for NewEJob {
-//     async fn run_job(&self, _ctx: Context<ConnectionPool<Db, PgConnection>>, job: EscalonJob) -> EscalonJob {
-//         println!("running job: {}", job.job_id);
-//         // use diesel::prelude::*;
-//         // use crate::database::schema::{appjobs, escalonjobs};
+#[async_trait]
+impl EscalonJobTrait<Context<ConnectionPool<Db, PgConnection>>> for NewEJob {
+    async fn run_job(&self, _ctx: Context<ConnectionPool<Db, PgConnection>>, job: EscalonJob) -> EscalonJob {
+        println!("running job: {}", job.job_id);
+        // use diesel::prelude::*;
+        // use crate::database::schema::{appjobs, escalonjobs};
 
-//         // let blah = ctx.0.get().await.unwrap().run(move |conn| {
-//         //     let app_job: AppJob = appjobs::table
-//         //         .filter(appjobs::job_id.eq(job.job_id))
-//         //         .first::<AppJob>(conn).unwrap();
+        // let blah = ctx.0.get().await.unwrap().run(move |conn| {
+        //     let app_job: AppJob = appjobs::table
+        //         .filter(appjobs::job_id.eq(job.job_id))
+        //         .first::<AppJob>(conn).unwrap();
 
-//         //     let escalon_job = escalonjobs::table
-//         //         .find(job.job_id)
-//         //         .first::<EJob>(conn).unwrap();
+        //     let escalon_job = escalonjobs::table
+        //         .find(job.job_id)
+        //         .first::<EJob>(conn).unwrap();
 
-//         //     AppJobComplete {
-//         //         id: app_job.id,
-//         //         service: app_job.service,
-//         //         route: app_job.route,
-//         //         job: escalon_job,
-//         //     }
+        //     AppJobComplete {
+        //         id: app_job.id,
+        //         service: app_job.service,
+        //         route: app_job.route,
+        //         job: escalon_job,
+        //     }
 
-//         // }).await;
+        // }).await;
 
-//         job
-//     }
-// }
+        job
+    }
+}

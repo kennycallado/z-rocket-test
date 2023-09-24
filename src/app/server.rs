@@ -13,7 +13,7 @@ use crate::app::providers::services::cron::CronManager;
 use crate::database::connection;
 use crate::database::schema::appjobs;
 use diesel::{PgConnection, ExpressionMethods};
-use escalon_jobs::manager::{EscalonJobsManager, ContextTrait};
+use escalon_jobs::manager::{EscalonJobsManager, ContextTrait, EscalonJobsManagerTrait};
 use rocket::{Rocket, Build, State, Orbit};
 #[cfg(feature = "db")]
 use rocket::fairing::AdHoc;
@@ -142,11 +142,11 @@ impl ContextTrait<Context<ContextDb>> for Context<ContextDb> {
             diesel::update(escalonjobs::table)
                 .filter(escalonjobs::id.eq(ejob.id))
                 .set(&ejob)
-                .get_result::<EJob>(conn)
+                .get_result::<EJob>(conn).unwrap()
             
         }).await;
 
-        println!("update_job: {:?}", blah);
+        println!("update_job: {:?} - {}", blah.id, blah.status);
 
         // let blah = ctx.0.get().await.unwrap().run(move |conn| {
         //     let app_job: AppJob = appjobs::table
@@ -167,29 +167,146 @@ impl ContextTrait<Context<ContextDb>> for Context<ContextDb> {
         // }).await;
     }
 
-    async fn take_jobs(&self, ctx: &Context<ContextDb>, from: String, start_at: usize, n_jobs: usize) {
+    // async fn take_jobs(&self, ctx: &Context<ContextDb>, from: String, start_at: usize, n_jobs: usize) {
+    //     use diesel::prelude::*;
+    //     use crate::database::schema::{appjobs, escalonjobs};
+
+    //     println!("taking jobs: {} {} {}", from, start_at, n_jobs);
+    //     let jobs: Vec<AppJob> = ctx.0.get().await.unwrap().run(move |conn| {
+    //         appjobs::table
+    //             .filter(appjobs::owner.eq(from))
+    //             .limit(n_jobs as i64)
+    //             .offset(start_at as i64)
+    //             .load::<AppJob>(conn).unwrap()
+    //     }).await;
+
+    //     for job in jobs {
+    //         let mut new_job: NewAppJob = job.into();
+    //         new_job.owner = ConfigGetter::get_identity();
+
+    //         let new_job = ctx.0.get().await.unwrap().run(move |conn| {
+    //             diesel::insert_into(appjobs::table)
+    //                 .values(&new_job)
+    //                 .get_result::<AppJob>(conn)
+    //         }).await;
+    //     }
+    // }
+}
+
+struct Functions;
+
+#[async_trait]
+impl EscalonJobsManagerTrait<Context<ContextDb>> for Functions {
+    async fn take_jobs(&self, manager: &EscalonJobsManager<Context<ContextDb>>, from_client: String, start_at: usize, n_jobs: usize) -> Result<Vec<String>, ()> {
         use diesel::prelude::*;
+
+        use crate::app::modules::escalon::repository as escalon_repository;
+        use crate::app::modules::escalon::model::{NewEJob, EJob};
+        use crate::database::connection::Db;
         use crate::database::schema::{appjobs, escalonjobs};
 
-        println!("taking jobs: {} {} {}", from, start_at, n_jobs);
-        let jobs: Vec<AppJob> = ctx.0.get().await.unwrap().run(move |conn| {
+        let id = ConfigGetter::get_identity();
+
+        let mut jobs_added = Vec::new();
+
+        // TODO: Should be resolved in escalon
+        if id == from_client { return Ok(jobs_added) }
+
+        let jobs: Vec<AppJob> = manager.context.0.0.get().await.unwrap().run(move |conn| {
             appjobs::table
-                .filter(appjobs::owner.eq(from))
+                .filter(appjobs::owner.eq(from_client))
                 .limit(n_jobs as i64)
                 .offset(start_at as i64)
                 .load::<AppJob>(conn).unwrap()
         }).await;
 
         for job in jobs {
-            let mut new_job: NewAppJob = job.into();
-            new_job.owner = ConfigGetter::get_identity();
+            // let mut new_job: NewAppJob = job.into();
+            // new_job.owner = ConfigGetter::get_identity();
 
-            let new_job = ctx.0.get().await.unwrap().run(move |conn| {
-                diesel::insert_into(appjobs::table)
-                    .values(&new_job)
-                    .get_result::<AppJob>(conn)
+            let new_ejob: EJob = manager.context.0.0.get().await.unwrap().run(move |conn| {
+                escalonjobs::table
+                    .filter(escalonjobs::id.eq(job.job_id.clone()))
+                    .first::<EJob>(conn).unwrap()
             }).await;
+
+            let old_uuid = new_ejob.id.clone();
+
+            let new_ejob: NewEJob = new_ejob.into();
+            let escalon_job = manager.add_job(new_ejob).await;
+            let new_job = NewAppJob {
+                owner: ConfigGetter::get_identity(),
+                service: job.service,
+                route: job.route,
+                job_id: escalon_job.job_id.clone(),
+            };
+
+            let ejob: EJob = escalon_job.clone().into();
+
+            // escalon_repository::insert(&db, escalon_job.into()).await.unwrap();
+            manager.context.0.0.get().await.unwrap().run(move |conn| {
+                diesel::insert_into(escalonjobs::table)
+                    .values(ejob)
+                    .get_result::<EJob>(conn).unwrap()
+            }).await;
+
+            // let job = cron_repository::create(&db, new_job).await.unwrap();
+            let job: AppJob = manager.context.0.0.get().await.unwrap().run(move |conn| {
+                diesel::insert_into(appjobs::table)
+                    .values(new_job)
+                    .get_result::<AppJob>(conn).unwrap()
+            }).await;
+            // let job = cron_repository::get_complete(&db, job.id).await.unwrap();
+
+            jobs_added.push(old_uuid.to_string());
         }
+
+        Ok(jobs_added)
+    }
+
+    async fn drop_jobs(&self, manager: &EscalonJobsManager<Context<ContextDb>>, jobs: Vec<String>) -> Result<(), ()> {
+        use diesel::prelude::*;
+        use crate::database::schema::{appjobs, escalonjobs};
+        use rocket::serde::uuid::Uuid;
+
+        println!("Jobs comming: {}", jobs.len());
+        println!("Current jobs: {:?}", manager.jobs.lock().unwrap().len());
+
+        let mut affected_rows: usize = 0;
+
+        for job in jobs {
+            let job_id: Uuid = Uuid::parse_str(job.as_str()).unwrap();
+
+            // let job = manager.get_job(job_id);
+            if let None = manager.get_job(job_id).await {
+                continue;
+            };
+
+            let id: i32 = manager.context.0.0.get().await.unwrap().run(move |conn| {
+                appjobs::table
+                    .filter(appjobs::job_id.eq(job_id.clone()))
+                    .select(appjobs::id)
+                    .first::<i32>(conn).unwrap()
+            }).await;
+
+
+            manager.context.0.0.get().await.unwrap().run(move |conn| {
+                diesel::delete(appjobs::table.find(&id))
+                    .execute(conn).unwrap();
+
+                diesel::delete(escalonjobs::table.find(&job_id))
+                    .execute(conn).unwrap();
+            }).await;
+
+            affected_rows += 1;
+
+            println!("{}", job_id);
+            manager.remove_job(job_id).await;
+        }
+
+        println!("Current jobs: {:?}", manager.jobs.lock().unwrap().len());
+        println!("Jobs dropped: {}", affected_rows);
+        Ok(())
     }
 }
 
@@ -199,11 +316,13 @@ async fn test(rocket: Rocket<Build>) -> Rocket<Build> {
         None => return rocket,
     };
 
+    let functions = Functions;
     let jm = EscalonJobsManager::new(Context(pool));
     let jm = jm
         .set_id(ConfigGetter::get_identity())
         .set_addr("0.0.0.0".parse::<IpAddr>().unwrap())
         .set_port(ConfigGetter::get_port().unwrap_or(65056))
+        .set_functions(functions)
         .build()
         .await;
 

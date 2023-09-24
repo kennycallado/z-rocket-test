@@ -33,7 +33,7 @@ Accept: application/json
 
 # {{{ example
 
-GET http://localhost:8002/cron/
+GET http://localhost:8001/cron/
 Accept: application/json
 Content-type: application/json
 
@@ -47,9 +47,9 @@ Content-type: application/json
 
 {
   "service": "servicio",
-  "route": "ruta--",
+  "route": "ruta",
   "job": {
-    "schedule": "0/2 * * * * *"
+    "schedule": "0/10 * * * * *"
   }
 }
 

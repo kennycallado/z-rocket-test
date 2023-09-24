@@ -15,7 +15,7 @@ use crate::database::connection::Db;
 
 pub fn routes() -> Vec<rocket::Route> {
     routes![ index, show,
-        // create
+        create
     ]
 }
 
@@ -33,25 +33,27 @@ pub async fn show(db: Db, id: i32) -> Json<AppJobComplete> {
     Json(job)
 }
 
-// #[post("/", data = "<new_job>")]
-// pub async fn create(db: Db, jm: &State<EscalonJobsManager<Context<ConnectionPool<Db, PgConnection>>>>, new_job: Json<PostNewAppJob>) -> Json<AppJobComplete> {
-//     let new_job = new_job.into_inner();
+#[post("/", data = "<new_job>")]
+pub async fn create(db: Db, jm: &State<EscalonJobsManager<Context<ConnectionPool<Db, PgConnection>>>>, new_job: Json<PostNewAppJob>) -> Json<AppJobComplete> {
+    let new_job = new_job.into_inner();
 
-//     // let escalon_job = jm.inner().0.escalon.add_job(new_job.job.clone()).await;
-//     let escalon_job = jm.inner().add_job(new_job.job.clone()).await;
+    // let escalon_job = jm.inner().0.escalon.add_job(new_job.job.clone()).await;
+    let escalon_job = jm.inner().add_job(new_job.job.clone()).await;
+    let new_job = NewAppJob {
+        owner: ConfigGetter::get_identity(),
+        service: new_job.service,
+        route: new_job.route,
+        job_id: escalon_job.job_id.clone(),
+    };
 
-//     let new_job = NewAppJob {
-//         owner: ConfigGetter::get_identity(),
-//         service: new_job.service,
-//         route: new_job.route,
-//         job_id: escalon_job.job_id.clone(),
-//     };
+    escalon_repository::insert(&db, escalon_job.into()).await.unwrap();
 
-//     escalon_repository::insert(&db, escalon_job.into()).await.unwrap();
-
-//     let job = cron_repository::create(&db, new_job).await.unwrap();
-//     let job = cron_repository::get_complete(&db, job.id).await.unwrap();
+    let job = cron_repository::create(&db, new_job).await.unwrap();
+    let job = cron_repository::get_complete(&db, job.id).await.unwrap();
 
 
-//     Json(job)
-// }
+    println!("Added");
+    println!("Current jobs: {:?}", jm.jobs.lock().unwrap().len());
+
+    Json(job)
+}
